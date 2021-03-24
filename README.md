@@ -7,3 +7,21 @@
 Automatically parse metadata and set `@grant`s.
 
 With this plugin, `@grant`s for [`GM_*` functions](https://violentmonkey.github.io/api/metadata-block/) will be added at compile time.
+
+## Usage
+
+Add the plugin to rollup.config.js:
+
+```js
+import userscript from 'rollup-plugin-userscript';
+
+const plugins = [
+  // ...
+  userscript(
+    path.resolve('src/meta.js'),
+    meta => meta
+      .replace('process.env.VERSION', pkg.version)
+      .replace('process.env.AUTHOR', pkg.author),
+  ),
+];
+```

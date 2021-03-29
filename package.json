@@ -11,7 +11,8 @@
     "clean": "del-cli dist",
     "build:js": "rollup -c rollup.conf.js",
     "build": "run-s ci clean build:js",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "prepublishOnly": "run-s build"
   },
   "main": "dist/index.common.js",
   "module": "dist/index.esm.js",

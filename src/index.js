@@ -26,22 +26,22 @@ const META_START = '// ==UserScript==';
 const META_END = '// ==/UserScript==';
 
 export default (metafile, transform) => {
-  const grants = new Set();
+  const grantMap = new Map();
   return {
     name: 'banner',
     buildStart() {
       this.addWatchFile(metafile);
-      grants.clear();
     },
-    transform(code) {
+    transform(code, id) {
       const ast = this.parse(code);
       let scope = attachScopes(ast, 'scope');
+      const grantSetPerFile = new Set();
       walk(ast, {
         enter(node, parent) {
           if (node.scope) scope = node.scope;
           if (node.type === 'Identifier' && isReference(node, parent) && !scope.contains(node.name)) {
             if (gmAPIs.includes(node.name)) {
-              grants.add(node.name);
+              grantSetPerFile.add(node.name);
             }
           }
         },
@@ -49,6 +49,7 @@ export default (metafile, transform) => {
           if (node.scope) scope = scope.parent;
         },
       });
+      grantMap.set(id, grantSetPerFile);
     },
     async banner() {
       let meta = await fs.readFile(metafile, 'utf8');
@@ -59,6 +60,7 @@ export default (metafile, transform) => {
         console.warn('Invalid metadata block. For more details see https://violentmonkey.github.io/api/metadata-block/');
         return;
       }
+      const grantSet = new Set();
       const items = lines.slice(start + 1, end)
         .map(line => {
           if (!line.startsWith('// ')) return;
@@ -68,14 +70,24 @@ export default (metafile, transform) => {
           const key = line.slice(0, i);
           const value = line.slice(i + 1).trim();
           if (key === '@grant') {
-            grants.add(value);
+            grantSet.add(value);
             return;
           }
           return [key, value];
         })
         .filter(Boolean);
-      for (const grant of grants) {
-        items.push(['@grant', grant]);
+      for (const id of this.getModuleIds()) {
+        const grantSetPerFile = grantMap.get(id);
+        if (grantSetPerFile) {
+          for (const item of grantSetPerFile) {
+            grantSet.add(item);
+          }
+        }
+      }
+      const grantList = Array.from(grantSet);
+      grantList.sort();
+      for (const item of grantList) {
+        items.push(['@grant', item]);
       }
       const maxKeyWidth = Math.max(...items.map(([key]) => key.length));
       meta = [

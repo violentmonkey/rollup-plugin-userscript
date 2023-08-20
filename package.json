@@ -1,6 +1,6 @@
 {
   "name": "rollup-plugin-userscript",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Rollup plugin for userscript",
   "author": "Gerald <gera2ld@live.com>",
   "license": "MIT",
@@ -16,9 +16,9 @@
   },
   "type": "module",
   "module": "dist/index.js",
-	"exports": {
-		"import": "./dist/index.js"
-	},
+  "exports": {
+    "import": "./dist/index.js"
+  },
   "files": [
     "dist"
   ],

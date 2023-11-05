@@ -55,8 +55,14 @@ export function getMetadata(metaFileContent, additionalGrantList) {
     .map(line => {
       if (!line.startsWith('// ')) return;
       line = line.slice(3).trim();
-      const i = line.indexOf(' ');
-      if (i < 0) return;
+      const i = line.search(/\s/);
+      if (i < 0) {
+        if (['@unwrap', '@noframes'].includes(line)) {
+          return [line, ''];
+        } else {
+          return;
+        }
+      }
       const key = line.slice(0, i);
       const value = line.slice(i + 1).trim();
       if (key === '@grant') {

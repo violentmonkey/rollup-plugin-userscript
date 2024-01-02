@@ -1,5 +1,6 @@
-import { attachScopes } from '@rollup/pluginutils';
-import { walk } from 'estree-walker';
+import { AttachedScope, attachScopes } from '@rollup/pluginutils';
+import type { AstNode } from 'rollup';
+import { walk, Node } from 'estree-walker';
 import isReference from 'is-reference';
 
 const gmAPIs = [
@@ -24,11 +25,11 @@ const gmAPIs = [
 const META_START = '// ==UserScript==';
 const META_END = '// ==/UserScript==';
 
-export function collectGmApi(ast) {
+export function collectGmApi(ast: AstNode) {
   let scope = attachScopes(ast, 'scope');
   const grantSetPerFile = new Set();
-  walk(ast, {
-    enter(node, parent) {
+  walk(ast as Node, {
+    enter(node: Node & { scope: AttachedScope }, parent) {
       if (node.scope) scope = node.scope;
       if (node.type === 'Identifier' && isReference(node, parent) && !scope.contains(node.name)) {
         if (gmAPIs.includes(node.name)) {
@@ -36,21 +37,21 @@ export function collectGmApi(ast) {
         }
       }
     },
-    leave(node) {
+    leave(node: Node & { scope: AttachedScope }) {
       if (node.scope) scope = scope.parent;
     },
   });
   return grantSetPerFile;
 }
 
-export function getMetadata(metaFileContent, additionalGrantList) {
+export function getMetadata(metaFileContent: string, additionalGrantList: Set<string>) {
   const lines = metaFileContent.split('\n').map(line => line.trim());
   const start = lines.indexOf(META_START);
   const end = lines.indexOf(META_END);
   if (start < 0 || end < 0) {
     throw new Error('Invalid metadata block. For more details see https://violentmonkey.github.io/api/metadata-block/');
   }
-  const grantSet = new Set();
+  const grantSet = new Set<string>();
   const entries = lines.slice(start + 1, end)
     .map(line => {
       if (!line.startsWith('// ')) return;

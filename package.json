@@ -10,14 +10,19 @@
     "dev": "rollup -wc",
     "clean": "del-cli dist",
     "build:js": "rollup -c",
-    "build": "run-s ci clean build:js",
+    "build:types": "tsc",
+    "build": "run-s ci clean build:js build:types",
     "prepare": "husky install",
     "prepublishOnly": "run-s build"
   },
   "type": "module",
-  "module": "dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    "import": "./dist/index.js"
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
   },
   "files": [
     "dist"
@@ -31,19 +36,20 @@
     "registry": "https://registry.npmjs.org/"
   },
   "dependencies": {
-    "@babel/runtime": "^7.22.10",
-    "@rollup/pluginutils": "^5.0.3",
+    "@babel/runtime": "^7.23.7",
+    "@rollup/pluginutils": "^5.1.0",
     "estree-walker": "^3.0.3",
-    "is-reference": "^3.0.1"
+    "is-reference": "^3.0.2"
   },
   "devDependencies": {
-    "@gera2ld/plaid": "~2.5.9",
-    "@gera2ld/plaid-rollup": "~2.5.9",
-    "del-cli": "^5.0.0",
+    "@gera2ld/plaid": "~2.7.0",
+    "@gera2ld/plaid-rollup": "~2.7.0",
+    "@types/node": "^20.10.6",
+    "del-cli": "^5.1.0",
     "husky": "^8.0.3"
   },
   "repository": "git@github.com:violentmonkey/rollup-plugin-userscript.git",
   "engines": {
-    "node": ">=16"
+    "node": ">=18"
   }
 }

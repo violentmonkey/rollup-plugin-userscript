@@ -1,9 +1,10 @@
 import { readFile } from 'fs/promises';
+import type { Plugin } from 'rollup';
 import { collectGmApi, getMetadata } from './util';
 
 const suffix = '?userscript-metadata';
 
-export default (transform) => {
+export default (transform?: (metadata: string) => string): Plugin => {
   const metadataMap = new Map();
   const grantMap = new Map();
   return {
@@ -36,7 +37,7 @@ export default (transform) => {
           .find(Boolean);
       if (!metadataFile) return;
       let metadata = await readFile(metadataFile, 'utf8');
-      const grantSet = new Set();
+      const grantSet = new Set<string>();
       for (const id of this.getModuleIds()) {
         const grantSetPerFile = grantMap.get(id);
         if (grantSetPerFile) {

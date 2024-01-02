@@ -1,12 +1,23 @@
-import { promises as fs } from 'fs';
+import { readFile } from 'fs/promises';
 import { collectGmApi, getMetadata } from './util';
 
-export default (metafile, transform) => {
+const suffix = '?userscript-metadata';
+
+export default (transform) => {
+  const metadataMap = new Map();
   const grantMap = new Map();
   return {
     name: 'userscript-metadata',
-    buildStart() {
-      this.addWatchFile(metafile);
+    async resolveId(source, importer, options) {
+      if (source.endsWith(suffix)) {
+        const { id } = await this.resolve(source, importer, options);
+        metadataMap.set(importer, id.slice(0, -suffix.length));
+      }
+    },
+    load(id) {
+      if (id.endsWith(suffix)) {
+        return '';
+      }
     },
     transform(code, id) {
       const ast = this.parse(code);
@@ -17,8 +28,14 @@ export default (metafile, transform) => {
      * Use `renderChunk` instead of `banner` to preserve the metadata after minimization.
      * Note that this plugin must be put after `@rollup/plugin-terser`.
      */
-    async renderChunk(code) {
-      const meta = await fs.readFile(metafile, 'utf8');
+    async renderChunk(code, chunk) {
+      const metadataFile =
+        chunk.isEntry &&
+        [chunk.facadeModuleId, ...Object.keys(chunk.modules)]
+          .map((id) => metadataMap.get(id))
+          .find(Boolean);
+      if (!metadataFile) return;
+      let metadata = await readFile(metadataFile, 'utf8');
       const grantSet = new Set();
       for (const id of this.getModuleIds()) {
         const grantSetPerFile = grantMap.get(id);
@@ -28,7 +45,7 @@ export default (metafile, transform) => {
           }
         }
       }
-      let metadata = getMetadata(meta, grantSet);
+      metadata = getMetadata(metadata, grantSet);
       if (transform) metadata = transform(metadata);
       return `${metadata}\n\n${code}`;
     },

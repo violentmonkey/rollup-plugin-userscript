@@ -17,11 +17,12 @@ import userscript from 'rollup-plugin-userscript';
 
 const plugins = [
   // ...
-  userscript(
-    path.resolve('src/meta.js'),
-    meta => meta
-      .replace('process.env.VERSION', pkg.version)
-      .replace('process.env.AUTHOR', pkg.author),
-  ),
+  userscript(meta => meta.replace('process.env.AUTHOR', pkg.author)),
 ];
+```
+
+Import the metadata file with a suffix `?userscript-metadata` in your script:
+
+```js
+import './meta.js?userscript-metadata';
 ```

@@ -1,4 +1,5 @@
 import { readFile } from 'fs/promises';
+import MagicString from 'magic-string';
 import type { Plugin } from 'rollup';
 import { collectGmApi, getMetadata } from './util';
 
@@ -48,7 +49,9 @@ export default (transform?: (metadata: string) => string): Plugin => {
       }
       metadata = getMetadata(metadata, grantSet);
       if (transform) metadata = transform(metadata);
-      return `${metadata}\n\n${code}`;
+      const s = new MagicString(code);
+      s.prepend(`${metadata}\n\n`);
+      return { code: s.toString(), map: s.generateMap().toString() };
     },
   };
 };

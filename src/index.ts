@@ -51,7 +51,10 @@ export default (transform?: (metadata: string) => string): Plugin => {
       if (transform) metadata = transform(metadata);
       const s = new MagicString(code);
       s.prepend(`${metadata}\n\n`);
-      return { code: s.toString(), map: s.generateMap().toString() };
+      return {
+        code: s.toString(),
+        map: s.generateMap({ hires: 'boundary' }).toString(),
+      };
     },
   };
 };

@@ -1,0 +1,16 @@
+services:
+  build:
+    build:
+      context: "./images/build"
+      network: host
+    cap_drop: ["ALL"]
+    entrypoint: ["pnpm"]
+    network_mode: "host"
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      # Bind the current directory to the working directory inside the container.
+      - type: "bind"
+        source: "./"
+        target: "/rollup-plugin-userscript"
+    
+    working_dir: "/rollup-plugin-userscript"

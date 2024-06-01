@@ -19,5 +19,5 @@ describe('collectGmApi', () => {
 describe('getMetadata', () => {
     it('should throw error on an empty input', () => {
         expect(() => getMetadata('', new Set())).toThrow(Error);
-    })
+    });
 });

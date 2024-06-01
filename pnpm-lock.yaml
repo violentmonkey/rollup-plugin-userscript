@@ -33,6 +33,9 @@ importers:
       '@gera2ld/plaid-test':
         specifier: ^2.6.0
         version: 2.6.0(@babel/core@7.24.6)(@types/node@20.10.6)(@typescript-eslint/eslint-plugin@6.17.0(@typescript-eslint/parser@6.17.0(eslint@8.56.0)(typescript@5.3.3))(eslint@8.56.0)(typescript@5.3.3))(eslint@8.56.0)(typescript@5.3.3)
+      '@types/node':
+        specifier: ^20.10.6
+        version: 20.10.6
       cross-env:
         specifier: ^7.0.3
         version: 7.0.3

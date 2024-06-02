@@ -23,4 +23,4 @@ else
         --build-arg "USER_GROUP_NAME=$(id -gn)" \
     )
 fi && \
-$CONTAINER_ENGINE compose run --rm --service-ports build "$@"
+$CONTAINER_ENGINE compose run --rm --service-ports pnpm "$@"

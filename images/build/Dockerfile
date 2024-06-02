@@ -8,8 +8,9 @@ ARG USER_GROUP_NAME
 # Add PNPM.
 RUN npm install -g pnpm@9.1.4
 
-# Mirror the host user inside the image.
-RUN if [ -n "${USER_NAME}" ] && [ "${USER_NAME}" != "root" ] && if [ -n "${USER_ID}" ]; then [ ${USER_ID} -ne 0 ]; fi; then \
+# Mirror the host user inside the image. Needed when using rootful Docker.
+# USER_NAME and USER_GROUP_NAME are required if the user is non-root.
+RUN if [ -n "${USER_GROUP_NAME}" ] && [ -n "${USER_NAME}" ] && [ "${USER_NAME}" != "root" ] && if [ -n "${USER_ID}" ]; then [ ${USER_ID} -ne 0 ]; fi; then \
         echo "Remove user" && \
         if getent passwd "${USER_NAME}"; then \
             deluser "${USER_NAME}" \

@@ -1,9 +1,24 @@
 #!/bin/sh
 if command -v podman; then
     CONTAINER_ENGINE=podman
+    ROOTLESS=true
 else
     CONTAINER_ENGINE=docker
+    if  docker info -f '{{println .SecurityOptions}}' | grep 'rootless' 1>/dev/null; then
+        ROOTLESS=true
+    else
+        ROOTLESS=false
+    fi
 fi
 
-$CONTAINER_ENGINE compose build && \
+if [ "$ROOTLESS" = true ]; then
+    $CONTAINER_ENGINE compose build
+else
+    ($CONTAINER_ENGINE compose build \
+        --build-arg "USER_ID=$(id -u)" \
+        --build-arg "USER_NAME=$(id -un)" \
+        --build-arg "USER_GROUP_ID=$(id -g)" \
+        --build-arg "USER_GROUP_NAME=$(id -gn)" \
+    )
+fi && \
 $CONTAINER_ENGINE compose run --rm --service-ports build "$@"

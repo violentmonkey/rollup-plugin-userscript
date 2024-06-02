@@ -6,6 +6,7 @@ if [ $? -eq 0 ]; then
     ROOTLESS=true
 else
     CONTAINER_ENGINE=docker
+    # https://sthbrx.github.io/blog/2023/04/05/detecting-rootless-docker/
     if  docker info -f '{{println .SecurityOptions}}' | grep 'rootless' 1>/dev/null; then
         ROOTLESS=true
     else

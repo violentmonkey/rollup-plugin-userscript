@@ -1,0 +1,27 @@
+#!/bin/sh
+
+podman compose 1>/dev/null 2>&1
+if [ $? -eq 0 ]; then
+    CONTAINER_ENGINE=podman
+    ROOTLESS=true
+else
+    CONTAINER_ENGINE=docker
+    # https://sthbrx.github.io/blog/2023/04/05/detecting-rootless-docker/
+    if  docker info -f '{{println .SecurityOptions}}' | grep 'rootless' 1>/dev/null; then
+        ROOTLESS=true
+    else
+        ROOTLESS=false
+    fi
+fi
+
+if [ "$ROOTLESS" = true ]; then
+    $CONTAINER_ENGINE compose build
+else
+    ($CONTAINER_ENGINE compose build \
+        --build-arg "USER_ID=$(id -u)" \
+        --build-arg "USER_NAME=$(id -un)" \
+        --build-arg "USER_GROUP_ID=$(id -g)" \
+        --build-arg "USER_GROUP_NAME=$(id -gn)" \
+    )
+fi && \
+$CONTAINER_ENGINE compose run --rm --service-ports pnpm "$@"

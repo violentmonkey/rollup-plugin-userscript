@@ -3,11 +3,6 @@ FROM node:18.20.3-alpine@sha256:5069da655539e2e986ce3fd1757f24a41b846958566c89ff
 # Add PNPM.
 RUN npm install -g pnpm@9.1.4
 
-ARG USER_ID
-ARG USER_NAME
-ARG USER_GROUP_ID
-ARG USER_GROUP_NAME
-
 # Mirror the host user inside the image to fix permission issues when using rootful Docker.
 ARG USER_ID
 ARG USER_NAME

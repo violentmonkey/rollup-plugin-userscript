@@ -1,0 +1,186 @@
+#!/bin/sh
+# https://github.com/AJGranowski/docker-user-mirror
+set -eC;
+
+compose_create() {
+    if [ -n "$COMPOSE_FILES" ]; then
+        $COMPOSE_ENGINE --progress quiet --file "$COMPOSE_FILES" create;
+    else
+        $COMPOSE_ENGINE --progress quiet create;
+    fi
+}
+
+get_created_container_id() {
+    if [ -n "$COMPOSE_FILES" ]; then
+        $COMPOSE_ENGINE --progress quiet --file "$COMPOSE_FILES" ps -a --status created --format '{{.ID}}';
+    else
+        $COMPOSE_ENGINE --progress quiet ps -a --status created --format '{{.ID}}';
+    fi
+}
+
+# Parse options
+while [ $# -gt 0 ]; do
+    case $1 in
+        --docker)
+            COMPOSE_ENGINE='docker compose';
+            CONTAINER_ENGINE='docker';
+            ;;
+        --docker-compose)
+            COMPOSE_ENGINE='docker-compose';
+            CONTAINER_ENGINE='docker';
+            ;;
+        --podman)
+            COMPOSE_ENGINE='podman compose';
+            CONTAINER_ENGINE='podman';
+            ;;
+        --podman-compose)
+            COMPOSE_ENGINE='podman-compose';
+            CONTAINER_ENGINE='podman';
+            ;;
+        --)
+            shift;
+            break;
+            ;;
+        -*)
+            printf 'Unknown option %s\n' $1 >&2;
+            exit 1;
+            ;;
+        *)
+            break;
+            ;;
+    esac
+    shift;
+done
+
+# Parse the command if no engine declared
+if [ -z "$COMPOSE_ENGINE" ] || [ -z "$CONTAINER_ENGINE" ]; then
+    case $1 in
+        docker-compose)
+            COMPOSE_ENGINE='docker-compose';
+            CONTAINER_ENGINE='docker';
+            ;;
+        podman)
+            COMPOSE_ENGINE='podman compose';
+            CONTAINER_ENGINE='podman';
+            ;;
+        podman-compose)
+            COMPOSE_ENGINE='podman-compose';
+            CONTAINER_ENGINE='podman';
+            ;;
+        *)
+            COMPOSE_ENGINE='docker compose';
+            CONTAINER_ENGINE='docker';
+    esac
+fi
+
+COMPOSE_FILES="";
+for arg do
+    case $arg in
+        -f|--file)
+            COMPOSE_FILES="$1";
+            ;;
+    esac
+done
+
+if [ "$CONTAINER_ENGINE" = "docker" ] && ! docker info -f '{{println .SecurityOptions}}' | grep 'rootless' 1>/dev/null; then
+    HOST_MAPPED_GROUP="$(id -gn)";
+    HOST_MAPPED_GID="$(id -g)";
+    HOST_MAPPED_USER="$(id -un)";
+    HOST_MAPPED_UID="$(id -u)";
+
+    # Parse docker-compose.yml by attempting to create and parse a container (but not starting it).
+    if compose_create >/dev/null; then
+        TEMP_CONTAINER_ID="$(get_created_container_id)";
+
+        # Create a list of paths to chown within the container.
+        CHOWN_LIST="$($CONTAINER_ENGINE inspect --format '{{range .Mounts}}{{if (ne .Mode "")}}"{{print .Destination}}" {{end}}{{end}}' "$TEMP_CONTAINER_ID")";
+
+        # Create host bind paths that where create_host_path=true.
+        while read create_path; do
+            if [ -z "$create_path" ]; then
+                break;
+            fi
+
+            mkdir -p "$create_path" >/dev/null 2>&1 || true;
+        done <<EOF
+$($CONTAINER_ENGINE inspect --format '{{range .Mounts}}{{if and (eq .Type "bind") (ne .Mode "")}}{{println .Source}}{{end}}{{end}}' "$TEMP_CONTAINER_ID")
+EOF
+        # Create mounts nested within bind mounts on the host.
+        while read edge_source; do
+            if [ -z "$edge_source" ]; then
+                break;
+            fi
+
+            read edge_destination;
+
+            while read node_source; do
+                if [ -z "$node_source" ]; then
+                    break;
+                fi
+
+                read node_destination;
+
+                resolved_node_destination="$(echo "$node_destination" | sed -e "s|^${edge_destination}/|${edge_source}/|g")";
+                if [ "$resolved_node_destination" = "$node_destination" ]; then
+                    # Skip if no resolution was made
+                    continue;
+                fi
+
+                if [ -f "$node_source" ]; then
+                    mkdir -p "$(dirname "$resolved_node_destination")" >/dev/null 2>&1 || true;
+                    touch "$resolved_node_destination";
+                else
+                    mkdir -p "$resolved_node_destination" >/dev/null 2>&1 || true;
+                fi
+            done <<EOF
+$($CONTAINER_ENGINE inspect --format '{{range .Mounts}}{{println .Source}}{{println .Destination}}{{end}}' "$TEMP_CONTAINER_ID")
+EOF
+
+        done <<EOF
+$($CONTAINER_ENGINE inspect --format '{{range .Mounts}}{{if eq .Type "bind"}}{{println .Source}}{{println .Destination}}{{end}}{{end}}' "$TEMP_CONTAINER_ID")
+EOF
+
+        $CONTAINER_ENGINE container rm "$TEMP_CONTAINER_ID" >/dev/null 2>&1;
+    fi
+else
+    HOST_MAPPED_GROUP='root';
+    HOST_MAPPED_GID=0;
+    HOST_MAPPED_USER='root';
+    HOST_MAPPED_UID=0;
+fi
+
+first_iteration=true;
+search_for_insert=true;
+for arg do
+    if [ "$first_iteration" = 'true' ]; then
+        unset first_iteration;
+        shift $#;
+    fi
+
+    if [ "$search_for_insert" = 'true' ]; then
+        case $arg in
+            create|exec|run)
+                set -- "$@" "$arg" '-e' "HOST_MAPPED_GID=$HOST_MAPPED_GID" '-e' "HOST_MAPPED_GROUP=$HOST_MAPPED_GROUP" '-e' "HOST_MAPPED_UID=$HOST_MAPPED_UID" '-e' "HOST_MAPPED_USER=$HOST_MAPPED_USER";
+                if [ -n "$CHOWN_LIST" ]; then
+                    set -- "$@" '-e' "CHOWN_LIST=$CHOWN_LIST";
+                fi
+                unset search_for_insert;
+                ;;
+            *)
+                set -- "$@" "$arg";
+                ;;
+        esac
+    else
+        set -- "$@" "$arg";
+    fi
+done
+
+export HOST_MAPPED_GROUP;
+export HOST_MAPPED_GID;
+export HOST_MAPPED_USER;
+export HOST_MAPPED_UID;
+if [ -n "$CHOWN_LIST" ]; then
+    export CHOWN_LIST;
+fi
+
+"$@";

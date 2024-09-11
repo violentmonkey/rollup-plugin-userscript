@@ -1,27 +1,40 @@
 #!/bin/sh
+COMPOSE_ENGINE='docker compose';
 
-podman compose 1>/dev/null 2>&1
-if [ $? -eq 0 ]; then
-    CONTAINER_ENGINE=podman
-    ROOTLESS=true
-else
-    CONTAINER_ENGINE=docker
-    # https://sthbrx.github.io/blog/2023/04/05/detecting-rootless-docker/
-    if  docker info -f '{{println .SecurityOptions}}' | grep 'rootless' 1>/dev/null; then
-        ROOTLESS=true
-    else
-        ROOTLESS=false
-    fi
+# Parse options
+while [ $# -gt 0 ]; do
+    case $1 in
+        --docker)
+            COMPOSE_ENGINE='docker compose'
+            ;;
+        --docker-compose)
+            COMPOSE_ENGINE='docker-compose'
+            ;;
+        --podman)
+            COMPOSE_ENGINE='podman compose'
+            ;;
+        --podman-compose)
+            COMPOSE_ENGINE='podman-compose'
+            ;;
+        --no-build)
+            o_no_build=true;
+            ;;
+        --)
+            shift;
+            break;
+            ;;
+        -*)
+            printf 'Unknown option %s\n' $1 >&2;
+            exit 1;
+            ;;
+        *)
+            break;
+            ;;
+    esac
+    shift;
+done
+
+if [ "$o_no_build" != "true" ]; then
+    $COMPOSE_ENGINE build
 fi
-
-if [ "$ROOTLESS" = true ]; then
-    $CONTAINER_ENGINE compose build
-else
-    ($CONTAINER_ENGINE compose build \
-        --build-arg "USER_ID=$(id -u)" \
-        --build-arg "USER_NAME=$(id -un)" \
-        --build-arg "USER_GROUP_ID=$(id -g)" \
-        --build-arg "USER_GROUP_NAME=$(id -gn)" \
-    )
-fi && \
-$CONTAINER_ENGINE compose run --rm --service-ports pnpm "$@"
+./user-mirror $COMPOSE_ENGINE run --rm pnpm "$@"

@@ -2,18 +2,15 @@
 # https://github.com/AJGranowski/docker-user-mirror
 set -eC;
 
-compose_create() {
-    if [ -n "$COMPOSE_FILES" ]; then
-        $COMPOSE_ENGINE --progress quiet --file "$COMPOSE_FILES" create;
-    else
-        $COMPOSE_ENGINE --progress quiet create;
-    fi
-}
-
-get_created_container_id() {
-    if [ -n "$COMPOSE_FILES" ]; then
+# Create a container and return the container ID.
+container_create() {
+    if [ -n "$REPLACED_COMMAND" ]; then
+        "$@";
+    elif [ -n "$COMPOSE_FILES" ]; then
+        $COMPOSE_ENGINE --progress quiet --file "$COMPOSE_FILES" create >/dev/null 2>&1;
         $COMPOSE_ENGINE --progress quiet --file "$COMPOSE_FILES" ps -a --status created --format '{{.ID}}';
     else
+        $COMPOSE_ENGINE --progress quiet create >/dev/null 2>&1;
         $COMPOSE_ENGINE --progress quiet ps -a --status created --format '{{.ID}}';
     fi
 }
@@ -70,16 +67,52 @@ if [ -z "$COMPOSE_ENGINE" ] || [ -z "$CONTAINER_ENGINE" ]; then
         *)
             COMPOSE_ENGINE='docker compose';
             CONTAINER_ENGINE='docker';
+            ;;
     esac
 fi
 
+# Change exec/run to create if not using compose
 COMPOSE_FILES="";
+first_iteration=true;
+search_for_replace=4;
 for arg do
-    case $arg in
-        -f|--file)
-            COMPOSE_FILES="$1";
-            ;;
-    esac
+    if [ "$first_iteration" = 'true' ]; then
+        unset first_iteration;
+        shift $#;
+    fi
+
+    if [ $search_for_replace -gt 0 ]; then
+        case $arg in
+            compose)
+                set -- "$@" "$arg";
+                search_for_replace=0;
+                ;;
+            exec|run)
+                REPLACED_COMMAND="$arg";
+                set -- "$@" "create";
+                search_for_replace=0;
+                ;;
+            *)
+                set -- "$@" "$arg";
+                ;;
+        esac
+
+        # Decrement for non-option arguments
+        case $arg in
+            -*)
+                ;;
+            *)
+                search_for_replace=$(($search_for_replace - 1));
+                ;;
+        esac
+    else
+        case $arg in
+            -f|--file)
+                COMPOSE_FILES="$1";
+                ;;
+        esac
+        set -- "$@" "$arg";
+    fi
 done
 
 if [ "$CONTAINER_ENGINE" = "docker" ] && ! docker info -f '{{println .SecurityOptions}}' | grep 'rootless' 1>/dev/null; then
@@ -89,11 +122,9 @@ if [ "$CONTAINER_ENGINE" = "docker" ] && ! docker info -f '{{println .SecurityOp
     HOST_MAPPED_UID="$(id -u)";
 
     # Parse docker-compose.yml by attempting to create and parse a container (but not starting it).
-    if compose_create >/dev/null; then
-        TEMP_CONTAINER_ID="$(get_created_container_id)";
-
+    if TEMP_CONTAINER_ID="$(container_create "$@")"; then
         # Create a list of paths to chown within the container.
-        CHOWN_LIST="$($CONTAINER_ENGINE inspect --format '{{range .Mounts}}{{if (ne .Mode "")}}"{{print .Destination}}" {{end}}{{end}}' "$TEMP_CONTAINER_ID")";
+        CHOWN_LIST="$($CONTAINER_ENGINE inspect --format '{{range .Mounts}}{{if .RW}}"{{print .Destination}}" {{end}}{{end}}' "$TEMP_CONTAINER_ID")";
 
         # Create host bind paths that where create_host_path=true.
         while read create_path; do
@@ -103,7 +134,7 @@ if [ "$CONTAINER_ENGINE" = "docker" ] && ! docker info -f '{{println .SecurityOp
 
             mkdir -p "$create_path" >/dev/null 2>&1 || true;
         done <<EOF
-$($CONTAINER_ENGINE inspect --format '{{range .Mounts}}{{if and (eq .Type "bind") (ne .Mode "")}}{{println .Source}}{{end}}{{end}}' "$TEMP_CONTAINER_ID")
+$($CONTAINER_ENGINE inspect --format '{{range .Mounts}}{{if and (eq .Type "bind") .RW}}{{println .Source}}{{end}}{{end}}' "$TEMP_CONTAINER_ID")
 EOF
         # Create mounts nested within bind mounts on the host.
         while read edge_source; do
@@ -150,24 +181,40 @@ else
 fi
 
 first_iteration=true;
-search_for_insert=true;
+search_for_insert=4;
 for arg do
     if [ "$first_iteration" = 'true' ]; then
         unset first_iteration;
         shift $#;
     fi
 
-    if [ "$search_for_insert" = 'true' ]; then
+    if [ $search_for_insert -gt 0 ]; then
         case $arg in
             create|exec|run)
-                set -- "$@" "$arg" '-e' "HOST_MAPPED_GID=$HOST_MAPPED_GID" '-e' "HOST_MAPPED_GROUP=$HOST_MAPPED_GROUP" '-e' "HOST_MAPPED_UID=$HOST_MAPPED_UID" '-e' "HOST_MAPPED_USER=$HOST_MAPPED_USER";
+                if [ -n "$REPLACED_COMMAND" ]; then
+                    set -- "$@" "$REPLACED_COMMAND";
+                else
+                    set -- "$@" "$arg";
+                fi
+
+                set -- "$@" '-e' "HOST_MAPPED_GID=$HOST_MAPPED_GID" '-e' "HOST_MAPPED_GROUP=$HOST_MAPPED_GROUP" '-e' "HOST_MAPPED_UID=$HOST_MAPPED_UID" '-e' "HOST_MAPPED_USER=$HOST_MAPPED_USER";
                 if [ -n "$CHOWN_LIST" ]; then
                     set -- "$@" '-e' "CHOWN_LIST=$CHOWN_LIST";
                 fi
-                unset search_for_insert;
+
+                search_for_insert=0;
                 ;;
             *)
                 set -- "$@" "$arg";
+                ;;
+        esac
+
+        # Decrement for non-option arguments
+        case $arg in
+            -*)
+                ;;
+            *)
+                search_for_insert=$(($search_for_insert - 1));
                 ;;
         esac
     else

@@ -12,8 +12,10 @@ export default (transform?: (metadata: string) => string): Plugin => {
     name: 'userscript-metadata',
     async resolveId(source, importer, options) {
       if (source.endsWith(suffix)) {
-        const { id } = await this.resolve(source, importer, options);
-        metadataMap.set(importer, id.slice(0, -suffix.length));
+        const sourceFile = source.slice(0, -suffix.length);
+        const { id } = await this.resolve(sourceFile, importer, options);
+        metadataMap.set(importer, id);
+        return source;
       }
     },
     load(id) {

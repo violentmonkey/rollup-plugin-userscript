@@ -1,6 +1,6 @@
 {
   "name": "rollup-plugin-userscript",
-  "version": "0.3.2",
+  "version": "0.3.4",
   "description": "Rollup plugin for userscript",
   "author": "Gerald <gera2ld@live.com>",
   "license": "MIT",
@@ -57,6 +57,8 @@
     "node": ">=18"
   },
   "jest": {
-    "extensionsToTreatAsEsm": [".ts"]
+    "extensionsToTreatAsEsm": [
+      ".ts"
+    ]
   }
 }

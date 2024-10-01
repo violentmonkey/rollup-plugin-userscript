@@ -1,0 +1,40 @@
+#!/bin/sh
+COMPOSE_ENGINE='docker compose';
+
+# Parse options
+while [ $# -gt 0 ]; do
+    case $1 in
+        --docker)
+            COMPOSE_ENGINE='docker compose'
+            ;;
+        --docker-compose)
+            COMPOSE_ENGINE='docker-compose'
+            ;;
+        --podman)
+            COMPOSE_ENGINE='podman compose'
+            ;;
+        --podman-compose)
+            COMPOSE_ENGINE='podman-compose'
+            ;;
+        --no-build)
+            o_no_build=true;
+            ;;
+        --)
+            shift;
+            break;
+            ;;
+        -*)
+            printf 'Unknown option %s\n' $1 >&2;
+            exit 1;
+            ;;
+        *)
+            break;
+            ;;
+    esac
+    shift;
+done
+
+if [ "$o_no_build" != "true" ]; then
+    $COMPOSE_ENGINE build
+fi
+./user-mirror $COMPOSE_ENGINE run --rm pnpm "$@"

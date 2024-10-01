@@ -1,6 +1,8 @@
 #!/bin/sh
-# https://github.com/AJGranowski/docker-user-mirror
+# Source: https://github.com/AJGranowski/docker-user-mirror
+# License: MIT
 set -eC;
+VERSION='0.0.14-73278bd';
 
 # Create a container and return the container ID.
 container_create() {
@@ -15,7 +17,108 @@ container_create() {
     fi
 }
 
-# Parse options
+# Download a release file.
+# Args: release filename, output filename, release tag (defaults to latest release it not provided)
+download_file() {
+    if [ $# -eq 3 ]; then
+        curl --fail -Ls -o "$2" "https://github.com/AJGranowski/docker-user-mirror/releases/download/$3/$1";
+    elif [ $# -eq 2 ]; then
+        curl --fail -Ls -o "$2" "https://github.com/AJGranowski/docker-user-mirror/releases/latest/download/$1";
+    else
+        echo 'Expected at least two arguments.' >&2;
+        return 1;
+    fi
+}
+
+# Query GitHub for the latest release tag.
+get_latest_release_tag() {
+    response="$(curl -Ls -w '%{http_code}' 'https://api.github.com/repos/AJGranowski/docker-user-mirror/releases/latest')";
+    case "$(echo "$response" | tail -1)" in
+        2*)
+            echo "$response" | \
+            grep -E '^\s*"tag_name":' | \
+            sed -E 's/.*"tag_name": "([^"]+)".*/\1/g'
+        ;;
+        *) false;;
+    esac
+}
+
+# Get the version ID of a release.
+# Args: release tag (defaults to latest release it not provided)
+get_release_version() {
+    if [ $# -eq 0 ]; then
+        response="$(curl -Ls -w '\n%{http_code}' 'https://github.com/AJGranowski/docker-user-mirror/releases/latest/download/version')";
+    else
+        response="$(curl -Ls -w '\n%{http_code}' "https://github.com/AJGranowski/docker-user-mirror/releases/download/$1/version")";
+    fi
+
+    case "$(echo "$response" | tail -1)" in
+        2*)
+            echo "$response" | head -1
+            ;;
+        *) false;;
+    esac
+}
+
+# Query GitHub to check if a release tag exists.
+release_tag_exists() {
+    case "$(curl -Ls -o /dev/null -w '%{http_code}' "https://api.github.com/repos/AJGranowski/docker-user-mirror/releases/tags/$1")" in
+        2*) true;;
+        *) false;;
+    esac
+}
+
+# Check for updates, and download the latest version.
+update() {
+    if ! latest_version="$(get_release_version)"; then
+        echo 'Unable to fetch the latest version. Try again in a few minutes.' >&2;
+        return 1;
+    fi
+
+    if [ "$VERSION" = "$latest_version" ]; then
+        echo 'Up to date.';
+    else
+        if ! release_tag_exists "$(version_to_release_tag)"; then
+            echo 'Critical update required!';
+            echo '    This version has been deleted, signaling either a critical bug or vulnerability. Update immediately.'
+        else
+            echo 'New update available.'
+        fi
+    fi
+
+    echo "    Current version: $VERSION";
+    echo "    Latest version:  $latest_version";
+
+    if [ "$VERSION" = "$latest_version" ]; then
+        return 0;
+    fi
+
+    if [ "$o_yes" != true ]; then
+        echo '\nInstall the update? (y/n)';
+        read yn;
+        case $yn in
+            y*) ;;
+            n*) return 0;;
+        esac
+    fi
+
+    echo "Installing update...";
+    download_file "$(basename "$0")" "${0}.tmp";
+    mv "${0}.tmp" "$0";
+    echo "${latest_version} installed!";
+    exit 0;
+}
+
+# Convert "$VERSION" to "release-**" format.
+version_to_release_tag() {
+    if [ $# -eq 0 ]; then
+        echo "$VERSION" | sed -E 's/([^-]*).*/release-\1/g'
+    else
+        echo "$1" | sed -E 's/([^-]*).*/release-\1/g'
+    fi
+}
+
+# Parse options.
 while [ $# -gt 0 ]; do
     case $1 in
         --docker)
@@ -34,6 +137,16 @@ while [ $# -gt 0 ]; do
             COMPOSE_ENGINE='podman-compose';
             CONTAINER_ENGINE='podman';
             ;;
+        --update)
+            o_update=true;
+            ;;
+        --version)
+            echo "Version: ${VERSION}";
+            exit 0;
+            ;;
+        -y|--yes)
+            o_yes=true;
+            ;;
         --)
             shift;
             break;
@@ -49,7 +162,15 @@ while [ $# -gt 0 ]; do
     shift;
 done
 
-# Parse the command if no engine declared
+if [ "$o_update" = true ]; then
+    if update; then
+        exit 0;
+    else
+        exit 1;
+    fi
+fi
+
+# Parse the command if no engine declared.
 if [ -z "$COMPOSE_ENGINE" ] || [ -z "$CONTAINER_ENGINE" ]; then
     case $1 in
         docker-compose)
@@ -71,12 +192,14 @@ if [ -z "$COMPOSE_ENGINE" ] || [ -z "$CONTAINER_ENGINE" ]; then
     esac
 fi
 
-# Change exec/run to create if not using compose
+# To get the arguments from a non-compose invocation, we'll change "exec" and "run" to "create", and then use that new
+#   command string to create (but not start) a container for parsing. This is a workaround for POSIX shell only having
+#   one array object (the argument list).
 COMPOSE_FILES="";
 first_iteration=true;
 search_for_replace=4;
 for arg do
-    if [ "$first_iteration" = 'true' ]; then
+    if [ "$first_iteration" = true ]; then
         unset first_iteration;
         shift $#;
     fi
@@ -97,7 +220,7 @@ for arg do
                 ;;
         esac
 
-        # Decrement for non-option arguments
+        # Decrement for non-option arguments.
         case $arg in
             -*)
                 ;;
@@ -115,18 +238,20 @@ for arg do
     fi
 done
 
+# If Docker and not rootless, then we have some work to do.
 if [ "$CONTAINER_ENGINE" = "docker" ] && ! docker info -f '{{println .SecurityOptions}}' | grep 'rootless' 1>/dev/null; then
     HOST_MAPPED_GROUP="$(id -gn)";
     HOST_MAPPED_GID="$(id -g)";
     HOST_MAPPED_USER="$(id -un)";
     HOST_MAPPED_UID="$(id -u)";
 
-    # Parse docker-compose.yml by attempting to create and parse a container (but not starting it).
+    # Parse mount information by creating a container and parsing it (but not starting it).
     if TEMP_CONTAINER_ID="$(container_create "$@")"; then
-        # Create a list of paths to chown within the container.
+
+        # Create a list of all read/write mount destinations so they can be chown'd in the container at runtime.
         CHOWN_LIST="$($CONTAINER_ENGINE inspect --format '{{range .Mounts}}{{if .RW}}"{{print .Destination}}" {{end}}{{end}}' "$TEMP_CONTAINER_ID")";
 
-        # Create host bind paths that where create_host_path=true.
+        # Loop through bind mounts that are read/write, and mkdir those source paths on the host.
         while read create_path; do
             if [ -z "$create_path" ]; then
                 break;
@@ -136,7 +261,8 @@ if [ "$CONTAINER_ENGINE" = "docker" ] && ! docker info -f '{{println .SecurityOp
         done <<EOF
 $($CONTAINER_ENGINE inspect --format '{{range .Mounts}}{{if and (eq .Type "bind") .RW}}{{println .Source}}{{end}}{{end}}' "$TEMP_CONTAINER_ID")
 EOF
-        # Create mounts nested within bind mounts on the host.
+        # Loop though every pair of bind mounts and all mounts to create nested directories and files on the host.
+        #   (for example, a volume mount within a bind mount will need to be created on the host relative to the bind mount)
         while read edge_source; do
             if [ -z "$edge_source" ]; then
                 break;
@@ -151,9 +277,11 @@ EOF
 
                 read node_destination;
 
+                # Find replace
                 resolved_node_destination="$(echo "$node_destination" | sed -e "s|^${edge_destination}/|${edge_source}/|g")";
+
                 if [ "$resolved_node_destination" = "$node_destination" ]; then
-                    # Skip if no resolution was made
+                    # Skip this pair if no resolution was made.
                     continue;
                 fi
 
@@ -171,6 +299,7 @@ EOF
 $($CONTAINER_ENGINE inspect --format '{{range .Mounts}}{{if eq .Type "bind"}}{{println .Source}}{{println .Destination}}{{end}}{{end}}' "$TEMP_CONTAINER_ID")
 EOF
 
+        # Cleanup.
         $CONTAINER_ENGINE container rm "$TEMP_CONTAINER_ID" >/dev/null 2>&1;
     fi
 else
@@ -180,10 +309,11 @@ else
     HOST_MAPPED_UID=0;
 fi
 
+# Restore the args list we may have mangled before, and insert runtime arguments.
 first_iteration=true;
 search_for_insert=4;
 for arg do
-    if [ "$first_iteration" = 'true' ]; then
+    if [ "$first_iteration" = true ]; then
         unset first_iteration;
         shift $#;
     fi
@@ -209,7 +339,7 @@ for arg do
                 ;;
         esac
 
-        # Decrement for non-option arguments
+        # Decrement for non-option arguments.
         case $arg in
             -*)
                 ;;

@@ -1,7 +1,7 @@
 FROM node:18.20.3-alpine@sha256:5069da655539e2e986ce3fd1757f24a41b846958566c89ff4a48874434d73749
 
 # Add PNPM.
-RUN npm install -g pnpm@9.10.0
+RUN npm install -g pnpm@9.11.0
 
 COPY entrypoint /entrypoint
 ARG GOSU_VERSION=1.17

@@ -1,5 +1,5 @@
-import { encode } from '@jridgewell/sourcemap-codec';
 import { readFile } from 'fs/promises';
+import MagicString from 'magic-string';
 import type { Plugin } from 'rollup';
 import { collectGmApi, getMetadata } from './util';
 
@@ -32,7 +32,7 @@ export default (transform?: (metadata: string) => string): Plugin => {
      * Use `renderChunk` instead of `banner` to preserve the metadata after minimization.
      * Note that this plugin must be put after `@rollup/plugin-terser`.
      */
-    async renderChunk(code, chunk, options) {
+    async renderChunk(code, chunk) {
       const metadataFile =
         chunk.isEntry &&
         [chunk.facadeModuleId, ...Object.keys(chunk.modules)]
@@ -51,27 +51,11 @@ export default (transform?: (metadata: string) => string): Plugin => {
       }
       metadata = getMetadata(metadata, grantSet);
       if (transform) metadata = transform(metadata);
-      let map = null;
-
-      if (options.sourcemap) {
-        const mappings = [
-          ...Array.from(metadata.split('\n'), () => []),
-          [],
-          ...Array.from(code.split('\n'), () => [[0, 0, 0, 0]]),
-        ];
-        map = {
-          version: 3,
-          file: chunk.fileName,
-          sources: [chunk.fileName],
-          sourcesContent: [code],
-          names: [],
-          mappings: encode(mappings),
-        };
-      }
-
+      const s = new MagicString(code);
+      s.prepend(`${metadata}\n\n`);
       return {
-        code: `${metadata}\n\n${code}`,
-        map,
+        code: s.toString(),
+        map: s.generateMap({ hires: 'boundary' }).toString(),
       };
     },
   };

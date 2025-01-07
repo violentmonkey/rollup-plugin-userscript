@@ -38,10 +38,10 @@
   },
   "dependencies": {
     "@babel/runtime": "^7.23.7",
+    "@jridgewell/sourcemap-codec": "^1.5.0",
     "@rollup/pluginutils": "^5.1.0",
     "estree-walker": "^3.0.3",
-    "is-reference": "^3.0.2",
-    "magic-string": "^0.30.7"
+    "is-reference": "^3.0.2"
   },
   "devDependencies": {
     "@gera2ld/plaid": "~2.7.0",

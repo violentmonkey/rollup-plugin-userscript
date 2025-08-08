@@ -2,46 +2,63 @@ import { AttachedScope, attachScopes } from '@rollup/pluginutils';
 import { Node, walk } from 'estree-walker';
 import isReference from 'is-reference';
 import type { AstNode } from 'rollup';
+import type { MemberExpression } from 'estree';
 
-const gmAPIs = [
-  'GM_info',
-  'GM_getValue',
-  'GM_getValues',
-  'GM_setValue',
-  'GM_setValues',
-  'GM_deleteValue',
-  'GM_deleteValues',
-  'GM_listValues',
-  'GM_addValueChangeListener',
-  'GM_removeValueChangeListener',
-  'GM_getResourceText',
-  'GM_getResourceURL',
-  'GM_addElement',
-  'GM_addStyle',
-  'GM_openInTab',
-  'GM_registerMenuCommand',
-  'GM_unregisterMenuCommand',
-  'GM_notification',
-  'GM_setClipboard',
-  'GM_xmlhttpRequest',
-  'GM_download',
-];
 const META_START = '// ==UserScript==';
 const META_END = '// ==/UserScript==';
+const GRANTS_REGEXP = /^unsafeWindow|GM[._][a-zA-Z0-9_]+/;
 
-export function collectGmApi(ast: AstNode) {
+export function collectGrants(ast: AstNode) {
   let scope = attachScopes(ast, 'scope');
   const grantSetPerFile = new Set();
   walk(ast as Node, {
     enter(node: Node & { scope: AttachedScope }, parent) {
       if (node.scope) scope = node.scope;
+
+      if (
+        node.type === 'MemberExpression' &&
+        isReference(node, parent)
+      ) {
+        function getMemberExpressionFullNameRecursive(astNode: MemberExpression): string | null {
+          if (astNode.property.type !== 'Identifier') {
+            return null;
+          }
+
+          switch (astNode.object.type) {
+            case 'MemberExpression': {
+              const nameSoFar = getMemberExpressionFullNameRecursive(astNode.object);
+              if (nameSoFar == null) {
+                return null;
+              }
+
+              return `${nameSoFar}.${astNode.property.name}`
+            }
+            case 'Identifier': {
+              return `${astNode.object.name}.${astNode.property.name}`;
+            }
+            default: {
+              return null;
+            }
+          }
+        }
+
+        const fullName = getMemberExpressionFullNameRecursive(node);
+        const match = GRANTS_REGEXP.exec(fullName);
+        if (match) {
+          grantSetPerFile.add(match[0]);
+
+          this.skip();
+        }
+      }
+
       if (
         node.type === 'Identifier' &&
         isReference(node, parent) &&
         !scope.contains(node.name)
       ) {
-        if (gmAPIs.includes(node.name)) {
-          grantSetPerFile.add(node.name);
+        const match = GRANTS_REGEXP.exec(node.name);
+        if (match) {
+          grantSetPerFile.add(match[0]);
         }
       }
     },

@@ -1,7 +1,7 @@
 import { readFile } from 'fs/promises';
 import MagicString from 'magic-string';
 import type { Plugin } from 'rollup';
-import { collectGmApi, getMetadata } from './util';
+import { collectGrants, getMetadata } from './util';
 
 const suffix = '?userscript-metadata';
 
@@ -25,7 +25,7 @@ export default (transform?: (metadata: string) => string): Plugin => {
     },
     transform(code, id) {
       const ast = this.parse(code);
-      const grantSetPerFile = collectGmApi(ast);
+      const grantSetPerFile = collectGrants(ast);
       grantMap.set(id, grantSetPerFile);
     },
     /**

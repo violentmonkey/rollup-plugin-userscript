@@ -1,23 +1,77 @@
+import { parse as parseCode } from '@babel/parser';
 import type { AstNode } from 'rollup';
-import type { EmptyStatement } from 'estree';
 
 import {
-    collectGmApi,
+    collectGrants,
     getMetadata
 } from '../src/util';
 
-describe('collectGmApi', () => {
-    const EMPTY_STATEMENT: EmptyStatement = {
-        type: 'EmptyStatement'
-    };
-    
-    it('should return an empty set on an empty input', () => {
-        expect(collectGmApi(EMPTY_STATEMENT as AstNode).size).toBe(0);
-    });
+describe('collectGrants', () => {
+  const parseCodeAsEstreeAst = (code: string) => {
+    const file = parseCode(code, { plugins: ['estree'] });
+    return file.program as AstNode;
+  };
+
+  it('should return an empty set on an empty input', () => {
+    const astNode = parseCodeAsEstreeAst(``);
+    const result = collectGrants(astNode);
+
+    expect(result.size).toBe(0);
+  });
+
+  it('should return only GM_dummyApi', () => {
+    const astNode = parseCodeAsEstreeAst(`GM_dummyApi`);
+    const result = collectGrants(astNode);
+
+    expect(result.size).toBe(1);
+    expect(result).toContain('GM_dummyApi');
+  });
+
+  it('should ignore any scope-defined variables that look like GM APIs', () => {
+    const astNode = parseCodeAsEstreeAst(`
+      let GM_dummyApi;
+      GM_dummyApi;
+    `);
+    const result = collectGrants(astNode);
+
+    expect(result.size).toBe(0);
+  });
+
+  it('should return only GM.dummyApi', () => {
+    const astNode = parseCodeAsEstreeAst(`GM.dummyApi`);
+    const result = collectGrants(astNode);
+
+    expect(result.size).toBe(1);
+    expect(result).toContain('GM.dummyApi');
+  });
+
+  it('should return unsafeWindow when presented with just unsafeWindow', () => {
+    const astNode = parseCodeAsEstreeAst(`unsafeWindow`);
+    const result = collectGrants(astNode);
+
+    expect(result.size).toBe(1);
+    expect(result).toContain('unsafeWindow');
+  });
+
+  it('should return unsafeWindow even when a subfield is accessed', () => {
+    const astNode = parseCodeAsEstreeAst(`unsafeWindow.anotherThing`);
+    const result = collectGrants(astNode);
+
+    expect(result.size).toBe(1);
+    expect(result).toContain('unsafeWindow');
+  });
+
+  it('should return unsafeWindow even when a subfield is accessed with object notation', () => {
+    const astNode = parseCodeAsEstreeAst(`unsafeWindow["anotherThing"]`);
+    const result = collectGrants(astNode);
+
+    expect(result.size).toBe(1);
+    expect(result).toContain('unsafeWindow');
+  });
 });
 
 describe('getMetadata', () => {
-    it('should throw error on an empty input', () => {
-        expect(() => getMetadata('', new Set())).toThrow(Error);
-    });
+  it('should throw error on an empty input', () => {
+    expect(() => getMetadata('', new Set())).toThrow(Error);
+  });
 });

@@ -6,7 +6,7 @@ import type { MemberExpression } from 'estree';
 
 const META_START = '// ==UserScript==';
 const META_END = '// ==/UserScript==';
-const GRANTS_REGEXP = /^unsafeWindow|GM[._][a-zA-Z0-9_]+/;
+const GRANTS_REGEXP = /^(unsafeWindow$|GM[._]\w+)/;
 
 export function collectGrants(ast: AstNode) {
   let scope = attachScopes(ast, 'scope');

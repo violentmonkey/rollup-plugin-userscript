@@ -53,6 +53,13 @@ describe('collectGrants', () => {
     expect(result).toContain('unsafeWindow');
   });
 
+  it('should return nothing unsafeWindow when presented with unsafeWindowButNotReally', () => {
+    const astNode = parseCodeAsEstreeAst(`unsafeWindowButNotReally`);
+    const result = collectGrants(astNode);
+
+    expect(result.size).toBe(0);
+  });
+
   it('should return unsafeWindow even when a subfield is accessed', () => {
     const astNode = parseCodeAsEstreeAst(`unsafeWindow.anotherThing`);
     const result = collectGrants(astNode);

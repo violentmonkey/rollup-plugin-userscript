@@ -19,29 +19,6 @@ export function collectGrants(ast: AstNode) {
         node.type === 'MemberExpression' &&
         isReference(node, parent)
       ) {
-        function getMemberExpressionFullNameRecursive(astNode: MemberExpression): string | null {
-          if (astNode.property.type !== 'Identifier') {
-            return null;
-          }
-
-          switch (astNode.object.type) {
-            case 'MemberExpression': {
-              const nameSoFar = getMemberExpressionFullNameRecursive(astNode.object);
-              if (nameSoFar == null) {
-                return null;
-              }
-
-              return `${nameSoFar}.${astNode.property.name}`
-            }
-            case 'Identifier': {
-              return `${astNode.object.name}.${astNode.property.name}`;
-            }
-            default: {
-              return null;
-            }
-          }
-        }
-
         const fullName = getMemberExpressionFullNameRecursive(node);
         const match = GRANTS_REGEXP.exec(fullName);
         if (match) {
@@ -67,6 +44,29 @@ export function collectGrants(ast: AstNode) {
     },
   });
   return grantSetPerFile;
+}
+
+function getMemberExpressionFullNameRecursive(astNode: MemberExpression): string | null {
+  if (astNode.property.type !== 'Identifier') {
+    return null;
+  }
+
+  switch (astNode.object.type) {
+    case 'MemberExpression': {
+      const nameSoFar = getMemberExpressionFullNameRecursive(astNode.object);
+      if (nameSoFar == null) {
+        return null;
+      }
+
+      return `${nameSoFar}.${astNode.property.name}`
+    }
+    case 'Identifier': {
+      return `${astNode.object.name}.${astNode.property.name}`;
+    }
+    default: {
+      return null;
+    }
+  }
 }
 
 export function getMetadata(

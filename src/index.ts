@@ -5,11 +5,32 @@ import { collectGrants, getMetadata } from './util';
 
 const suffix = '?userscript-metadata';
 
+type TransformFn = (metadata: string) => string;
+
 export interface UserscriptMetaOptions {
+  transform?: TransformFn;
   ignoreAutomaticGrants?: string[];
 }
 
-export default (transform?: (metadata: string) => string, userOptions: UserscriptMetaOptions = {}): Plugin => {
+function userscriptPlugin(transform?: TransformFn): Plugin;
+function userscriptPlugin(options?: UserscriptMetaOptions): Plugin;
+function userscriptPlugin(
+  transform?: TransformFn,
+  options?: Omit<UserscriptMetaOptions, 'transform'>
+): Plugin;
+
+function userscriptPlugin(
+  transformOrUserOptions?: TransformFn | UserscriptMetaOptions,
+  userOptions?: UserscriptMetaOptions
+): Plugin {
+  let transform: TransformFn | undefined;
+  if (typeof transformOrUserOptions === 'function') {
+    transform = transformOrUserOptions;
+  } else {
+    userOptions = transformOrUserOptions;
+    transform = userOptions?.transform;
+  }
+
   const metadataMap = new Map();
   const grantMap = new Map();
   return {
@@ -68,3 +89,5 @@ export default (transform?: (metadata: string) => string, userOptions: Userscrip
     },
   };
 };
+
+export default userscriptPlugin;

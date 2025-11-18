@@ -5,7 +5,11 @@ import { collectGrants, getMetadata } from './util';
 
 const suffix = '?userscript-metadata';
 
-export default (transform?: (metadata: string) => string): Plugin => {
+export interface UserscriptMetaOptions {
+  ignoreAutomaticGrants?: string[];
+}
+
+export default (transform?: (metadata: string) => string, userOptions: UserscriptMetaOptions = {}): Plugin => {
   const metadataMap = new Map();
   const grantMap = new Map();
   return {
@@ -45,6 +49,10 @@ export default (transform?: (metadata: string) => string): Plugin => {
         const grantSetPerFile = grantMap.get(id);
         if (grantSetPerFile) {
           for (const item of grantSetPerFile) {
+            if (userOptions.ignoreAutomaticGrants?.includes(item)) {
+              continue;
+            }
+
             grantSet.add(item);
           }
         }

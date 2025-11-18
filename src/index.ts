@@ -14,22 +14,13 @@ export interface UserscriptMetaOptions {
 
 function userscriptPlugin(transform?: TransformFn): Plugin;
 function userscriptPlugin(options?: UserscriptMetaOptions): Plugin;
-function userscriptPlugin(
-  transform?: TransformFn,
-  options?: Omit<UserscriptMetaOptions, 'transform'>
-): Plugin;
 
 function userscriptPlugin(
-  transformOrUserOptions?: TransformFn | UserscriptMetaOptions,
-  userOptions?: UserscriptMetaOptions
+  transformOrUserOptions?: TransformFn | UserscriptMetaOptions
 ): Plugin {
-  let transform: TransformFn | undefined;
-  if (typeof transformOrUserOptions === 'function') {
-    transform = transformOrUserOptions;
-  } else {
-    userOptions = transformOrUserOptions;
-    transform = userOptions?.transform;
-  }
+  const userOptions = typeof transformOrUserOptions === 'function'
+    ? { transform: transformOrUserOptions }
+    : transformOrUserOptions;
 
   const metadataMap = new Map();
   const grantMap = new Map();
@@ -79,7 +70,7 @@ function userscriptPlugin(
         }
       }
       metadata = getMetadata(metadata, grantSet);
-      if (transform) metadata = transform(metadata);
+      if (userOptions.transform) metadata = userOptions.transform(metadata);
       const s = new MagicString(code);
       s.prepend(`${metadata}\n\n`);
       return {

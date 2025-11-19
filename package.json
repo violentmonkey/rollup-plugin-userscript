@@ -1,6 +1,6 @@
 {
   "name": "rollup-plugin-userscript",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Rollup plugin for userscript",
   "author": "Gerald <gera2ld@live.com>",
   "license": "MIT",

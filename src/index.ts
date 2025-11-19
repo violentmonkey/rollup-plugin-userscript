@@ -5,7 +5,23 @@ import { collectGrants, getMetadata } from './util';
 
 const suffix = '?userscript-metadata';
 
-export default (transform?: (metadata: string) => string): Plugin => {
+type TransformFn = (metadata: string) => string;
+
+export interface UserscriptMetaOptions {
+  transform?: TransformFn;
+  ignoreAutomaticGrants?: string[];
+}
+
+function userscriptPlugin(transform?: TransformFn): Plugin;
+function userscriptPlugin(options?: UserscriptMetaOptions): Plugin;
+
+function userscriptPlugin(
+  transformOrUserOptions?: TransformFn | UserscriptMetaOptions
+): Plugin {
+  const userOptions = typeof transformOrUserOptions === 'function'
+    ? { transform: transformOrUserOptions }
+    : transformOrUserOptions;
+
   const metadataMap = new Map();
   const grantMap = new Map();
   return {
@@ -45,12 +61,16 @@ export default (transform?: (metadata: string) => string): Plugin => {
         const grantSetPerFile = grantMap.get(id);
         if (grantSetPerFile) {
           for (const item of grantSetPerFile) {
+            if (userOptions.ignoreAutomaticGrants?.includes(item)) {
+              continue;
+            }
+
             grantSet.add(item);
           }
         }
       }
       metadata = getMetadata(metadata, grantSet);
-      if (transform) metadata = transform(metadata);
+      if (userOptions.transform) metadata = userOptions.transform(metadata);
       const s = new MagicString(code);
       s.prepend(`${metadata}\n\n`);
       return {
@@ -60,3 +80,5 @@ export default (transform?: (metadata: string) => string): Plugin => {
     },
   };
 };
+
+export default userscriptPlugin;
